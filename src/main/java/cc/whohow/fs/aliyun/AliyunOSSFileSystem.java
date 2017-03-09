@@ -38,6 +38,10 @@ public class AliyunOSSFileSystem extends FileSystem {
         return fileStore;
     }
 
+    public String getProperty(String key) {
+        return properties.getProperty(key);
+    }
+
     public String getVfs() {
         return vfs;
     }

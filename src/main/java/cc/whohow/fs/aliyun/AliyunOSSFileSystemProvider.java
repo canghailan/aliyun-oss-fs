@@ -107,8 +107,12 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         return fileStores.computeIfAbsent(key, self -> new AliyunOSSFileStore(this, properties));
     }
 
-    public List<FileStore> getFileStores() {
-        return new ArrayList<>(fileStores.values());
+    public Collection<FileSystem> getFileSystems() {
+        return Collections.unmodifiableCollection(new HashSet<>(fileSystems.values()));
+    }
+
+    public Collection<FileStore> getFileStores() {
+        return Collections.unmodifiableCollection(fileStores.values());
     }
 
     @Override
