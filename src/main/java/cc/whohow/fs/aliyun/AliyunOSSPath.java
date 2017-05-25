@@ -1,5 +1,6 @@
 package cc.whohow.fs.aliyun;
 
+import cc.whohow.fs.Names;
 import com.aliyun.oss.OSSClient;
 
 import java.io.File;
@@ -10,9 +11,6 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.Iterator;
-import java.util.Spliterators;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -20,9 +18,6 @@ import java.util.stream.StreamSupport;
  * OSS路径。以/开头为绝对路径，否则为相对路径。以/结尾为目录，否则为普通文件。
  */
 public class AliyunOSSPath implements Path {
-    private static final Pattern NAME = Pattern.compile("(?:^|/)([^/]*)"); // 路径名正则表达式
-    private static final Pattern FILE_NAME = Pattern.compile("^(.*)([^/]*)/?$"); // 文件名正则表达式
-
     private final AliyunOSSFileSystem fileSystem; // 所属文件系统
     private final String pathDescriptor; // 路径描述符，绝对路径为 /ObjectKey，相对路径为name1/name2/.../nameN
 
@@ -84,11 +79,7 @@ public class AliyunOSSPath implements Path {
      */
     @Override
     public AliyunOSSPath getFileName() {
-        Matcher matcher = FILE_NAME.matcher(pathDescriptor);
-        if (matcher.matches()) {
-            return new AliyunOSSPath(fileSystem, matcher.group(2));
-        }
-        return null;
+        return new AliyunOSSPath(fileSystem, Names.getName(pathDescriptor));
     }
 
     /**
@@ -96,25 +87,25 @@ public class AliyunOSSPath implements Path {
      */
     @Override
     public AliyunOSSPath getParent() {
-        Matcher matcher = FILE_NAME.matcher(pathDescriptor);
-        if (matcher.matches()) {
-            String parent = matcher.group(1);
-            if (parent.isEmpty()) {
-                return null;
-            }
-            return new AliyunOSSPath(fileSystem, parent);
+        String parent = Names.getPrefix(pathDescriptor);
+        if (parent.isEmpty()) {
+            return null;
         }
-        return null;
+        return new AliyunOSSPath(fileSystem, parent);
+    }
+
+    public Iterable<String> getNames() {
+        return Names.getNames(toString());
     }
 
     @Override
     public int getNameCount() {
-        return (int) StreamSupport.stream(Spliterators.spliteratorUnknownSize(nameIterator(), 0), false).count();
+        return Names.getNameCount(toString());
     }
 
     @Override
     public AliyunOSSPath getName(int index) {
-        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(nameIterator(), 0), false)
+        return StreamSupport.stream(getNames().spliterator(), false)
                 .skip(index)
                 .findFirst()
                 .map(name -> new AliyunOSSPath(fileSystem, name))
@@ -123,7 +114,7 @@ public class AliyunOSSPath implements Path {
 
     @Override
     public AliyunOSSPath subpath(int beginIndex, int endIndex) {
-        String names = StreamSupport.stream(Spliterators.spliteratorUnknownSize(nameIterator(), 0), false)
+        String names = StreamSupport.stream(getNames().spliterator(), false)
                 .skip(beginIndex)
                 .limit(endIndex - beginIndex + 1)
                 .collect(Collectors.joining("/"));
@@ -196,7 +187,7 @@ public class AliyunOSSPath implements Path {
      */
     public URL toUrl() {
         try {
-            return new URL("http://" + getFileStore().getCname().get(0) + pathDescriptor);
+            return new URL(getFileStore().getScheme() + "://" + getFileStore().getCname().get(0) + pathDescriptor);
         } catch (MalformedURLException e) {
             throw new UncheckedIOException(e);
         }
@@ -233,30 +224,9 @@ public class AliyunOSSPath implements Path {
 
     @Override
     public Iterator<Path> iterator() {
-        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(nameIterator(), 0), false)
+        return StreamSupport.stream(getNames().spliterator(), false)
                 .map(self -> (Path) new AliyunOSSPath(fileSystem, self))
                 .iterator();
-    }
-
-    public Iterable<String> getNames() {
-        return this::nameIterator;
-    }
-
-    public Iterator<String> nameIterator() {
-        String names = toString().replaceAll("(^/|/$)", "");
-        return new Iterator<String>() {
-            Matcher matcher = NAME.matcher(names);
-
-            @Override
-            public boolean hasNext() {
-                return matcher.find();
-            }
-
-            @Override
-            public String next() {
-                return matcher.group(1);
-            }
-        };
     }
 
     @Override

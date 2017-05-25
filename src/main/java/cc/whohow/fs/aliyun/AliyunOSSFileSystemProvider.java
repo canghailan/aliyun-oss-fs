@@ -128,6 +128,20 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     }
 
     /**
+     * 是否存在
+     */
+    public boolean exists(String uri) {
+        return exists(getPath(uri));
+    }
+
+    /**
+     * 是否存在
+     */
+    public boolean exists(AliyunOSSPath path) {
+        return path.getClient().doesObjectExist(path.getBucketName(), path.getObjectKey());
+    }
+
+    /**
      * 拷贝（上传）
      */
     public void copy(File source, String target) {
@@ -525,13 +539,10 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     }
 
     /**
-     * 写入文件
+     * 写入文件，文件需不存在，默认 128KB 缓冲区
      */
     public OutputStream newOutputStream(AliyunOSSPath path) {
-        if (path.getClient().doesObjectExist(path.getBucketName(), path.getObjectKey())) {
-            throw new UncheckedIOException(new IOException(path.toUri() + " exists"));
-        }
-        return new BufferedOutputStream(new AliyunOSSOutputStream(path), 128 * 1024); // default 128K buffer
+        return new BufferedOutputStream(new AliyunOSSOutputStream(path), 128 * 1024);
     }
 
     /**
