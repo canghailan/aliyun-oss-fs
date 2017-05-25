@@ -1,6 +1,13 @@
 package cc.whohow.fs.aliyun;
 
+import com.aliyun.oss.model.ObjectMetadata;
+
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 public class TestAliyunFileSystem {
@@ -10,14 +17,23 @@ public class TestAliyunFileSystem {
             properties.load(props);
         }
         try (AliyunOSSFileSystemProvider fs = new AliyunOSSFileSystemProvider(properties)) {
-            System.out.println(fs.getPath("/vfs-test/")); // 虚拟文件路径
-            fs.list("/vfs-test/").forEach(System.out::println);
+            AliyunOSSPath path =  fs.getPath("/vfs-test/test.txt");
+            ObjectMetadata objectMetadata = new ObjectMetadata();
+            objectMetadata.setLastModified(new Date());
+            Map<String, String> map = new HashMap<>();
+            map.put("content-sha256", "aa");
+            map.put("content-md5", "bb");
+            objectMetadata.setUserMetadata(map);
+            fs.setMetadata(path, objectMetadata);
+            System.out.println(fs.getContentAsString(path, "utf-8"));
+            System.out.println(fs.getMetadata(path).getLastModified());
+            System.out.println(fs.getMetadata(path).getUserMetadata());
 
-            System.out.println(fs.getPath("http://xxx.oss-cn-hangzhou.aliyuncs.com/test/")); // 标准OSS地址
-            fs.list("http://xxx.oss-cn-hangzhou.aliyuncs.com/test/").forEach(System.out::println);
-
-            System.out.println(fs.getPath("http://xxx.img-cn-hangzhou.aliyuncs.com/test/")); // CDN地址
-            fs.list("http://xxx.img-cn-hangzhou.aliyuncs.com/test/").forEach(System.out::println);
+            try (SeekableByteChannel channel = fs.newByteChannel(path, null, null)) {
+                channel.truncate(0);
+                channel.write(ByteBuffer.wrap("new".getBytes()));
+            }
+            System.out.println(fs.getContentAsString(path, "utf-8"));
         }
     }
 }

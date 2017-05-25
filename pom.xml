@@ -6,7 +6,7 @@
 
     <groupId>cc.whohow</groupId>
     <artifactId>aliyun-oss-fs</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.4</version>
 
     <build>
         <plugins>
@@ -17,6 +17,18 @@
                     <target>1.8</target>
                     <encoding>UTF8</encoding>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

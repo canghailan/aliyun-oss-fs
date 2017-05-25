@@ -1,17 +1,11 @@
 package cc.whohow.fs.aliyun;
 
 import cc.whohow.fs.FilterDirectoryStream;
-import cc.whohow.fs.TempFileChannel;
 import com.aliyun.oss.OSSClient;
-import com.aliyun.oss.model.GetObjectRequest;
-import com.aliyun.oss.model.OSSObject;
-import com.aliyun.oss.model.OSSObjectSummary;
-import com.aliyun.oss.model.ObjectMetadata;
+import com.aliyun.oss.common.utils.IOUtils;
+import com.aliyun.oss.model.*;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.net.*;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.*;
@@ -401,6 +395,23 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     }
 
     /**
+     * 设置文件属性
+     */
+    public void setMetadata(String uri, ObjectMetadata objectMetadata) {
+       setMetadata(getPath(uri), objectMetadata);
+    }
+
+    /**
+     * 设置文件属性
+     */
+    public void setMetadata(AliyunOSSPath path, ObjectMetadata objectMetadata) {
+        CopyObjectRequest copyObjectRequest = new CopyObjectRequest(
+                path.getBucketName(), path.getObjectKey(), path.getBucketName(), path.getObjectKey());
+        copyObjectRequest.setNewObjectMetadata(objectMetadata);
+        path.getClient().copyObject(copyObjectRequest);
+    }
+
+    /**
      * 获取文件或文件夹大小
      */
     public long getSize(String uri) {
@@ -472,6 +483,69 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
      */
     public InputStream newInputStream(AliyunOSSPath path) {
         return path.getClient().getObject(path.getBucketName(), path.getObjectKey()).getObjectContent();
+    }
+
+    /**
+     * 读取文件内容
+     */
+    public byte[] getContent(String uri) throws IOException {
+        return getContent(getPath(uri));
+    }
+
+    /**
+     * 读取文件内容
+     */
+    public byte[] getContent(AliyunOSSPath path) throws IOException {
+        try (InputStream stream = newInputStream(path)) {
+            return IOUtils.readStreamAsByteArray(stream);
+        }
+    }
+
+    /**
+     * 读取文件内容
+     */
+    public String getContentAsString(String uri, String charset) throws IOException {
+        return getContentAsString(getPath(uri), charset);
+    }
+
+    /**
+     * 读取文件内容
+     */
+    public String getContentAsString(AliyunOSSPath path, String charset) throws IOException {
+        try (InputStream stream = newInputStream(path)) {
+            return IOUtils.readStreamAsString(stream, charset);
+        }
+    }
+
+    /**
+     * 写入文件
+     */
+    public OutputStream newOutputStream(String uri) {
+        return newOutputStream(getPath(uri));
+    }
+
+    /**
+     * 写入文件
+     */
+    public OutputStream newOutputStream(AliyunOSSPath path) {
+        if (path.getClient().doesObjectExist(path.getBucketName(), path.getObjectKey())) {
+            throw new UncheckedIOException(new IOException(path.toUri() + " exists"));
+        }
+        return new BufferedOutputStream(new AliyunOSSOutputStream(path), 128 * 1024); // default 128K buffer
+    }
+
+    /**
+     * 写入文件
+     */
+    public void setContent(String uri, byte[] content) {
+        setContent(getPath(uri), content);
+    }
+
+    /**
+     * 写入文件
+     */
+    public void setContent(AliyunOSSPath path, byte[] content) {
+        path.getClient().putObject(path.getBucketName(), path.getObjectKey(), new ByteArrayInputStream(content));
     }
 
     /**
@@ -587,18 +661,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     @Override
     public SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>[] attrs) throws IOException {
         AliyunOSSPath aliyunOSSPath = (AliyunOSSPath) path;
-        if (!aliyunOSSPath.isFile()) {
-            throw new IllegalArgumentException();
-        }
-        File temp = File.createTempFile("AliyunOSS-", null);
-        copy(aliyunOSSPath, temp);
-        return new TempFileChannel(temp, options, (file, modified) -> {
-            if (modified) {
-                copy(file, aliyunOSSPath);
-            }
-            file.delete();
-            return null;
-        });
+        return new AliyunOSSFileChannel(aliyunOSSPath);
     }
 
     @Override

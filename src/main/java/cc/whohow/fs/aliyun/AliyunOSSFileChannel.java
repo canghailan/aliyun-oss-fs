@@ -1,27 +1,30 @@
-package cc.whohow.fs;
+package cc.whohow.fs.aliyun;
+
+import com.aliyun.oss.model.GetObjectRequest;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
-import java.nio.file.OpenOption;
-import java.util.Set;
-import java.util.function.BiFunction;
+import java.nio.file.StandardOpenOption;
 
-/**
- * 临时文件Channel，为远程文件提供随机读写功能
- */
-public class TempFileChannel implements SeekableByteChannel {
+public class AliyunOSSFileChannel implements SeekableByteChannel {
+    private final AliyunOSSPath path; // 路径
     private final File tempFile; // 临时文件
     private final FileChannel tempFileChannel; // 临时文件Channel
-    private final BiFunction<File, Boolean, Void> closeHook; // 关闭钩子
     private volatile boolean modified; // 文件是否被修改
 
-    public TempFileChannel(File tempFile, Set<? extends OpenOption> options, BiFunction<File, Boolean, Void> closeHook) throws IOException {
-        this.tempFile = tempFile;
-        this.tempFileChannel = FileChannel.open(tempFile.toPath(), options);
-        this.closeHook = closeHook;
+    public AliyunOSSFileChannel(AliyunOSSPath path) throws IOException {
+        if (!path.isFile()) {
+            throw new IOException(path.toUri() + " is not file");
+        }
+        this.path = path;
+        this.tempFile = File.createTempFile("AliyunOSSFileChannel", null);
+        if (this.path.getClient().doesObjectExist(path.getBucketName(), path.getObjectKey())) {
+            this.path.getClient().getObject(new GetObjectRequest(path.getBucketName(), path.getObjectKey()), this.tempFile);
+        }
+        this.tempFileChannel = FileChannel.open(tempFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
         this.modified = false;
     }
 
@@ -66,9 +69,15 @@ public class TempFileChannel implements SeekableByteChannel {
 
     @Override
     public void close() throws IOException {
-        tempFileChannel.close();
-        if (closeHook != null) {
-            closeHook.apply(tempFile, modified);
+        try {
+            tempFileChannel.close();
+            if (modified) {
+                path.getClient().putObject(path.getBucketName(), path.getObjectKey(), tempFile);
+            }
+        }finally {
+            if (!tempFile.delete()) {
+                tempFile.deleteOnExit();
+            }
         }
     }
 }
