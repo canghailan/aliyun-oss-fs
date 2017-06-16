@@ -2,7 +2,9 @@ package cc.whohow.fs.aliyun;
 
 import com.aliyun.oss.model.OSSObjectSummary;
 
+import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
@@ -66,22 +68,24 @@ public class AliyunOSSWatchTask implements Runnable {
             OSSObjectSummary p = prevObjects.remove(c.getKey());
             if (p == null) {
                 // 上次记录中文件不存在，文件新增或监听范围扩大
-                dispatchEvents(prevRoot, new AliyunOSSWatchEvent(StandardWatchEventKinds.ENTRY_CREATE, null, c));
+                dispatchEvents(prevRoot, StandardWatchEventKinds.ENTRY_CREATE, c);
             } else if (!Objects.equals(p.getETag(), c.getETag())) {
                 // ETag变化，文件被修改
-                dispatchEvents(prevRoot, new AliyunOSSWatchEvent(StandardWatchEventKinds.ENTRY_MODIFY, null, c));
+                dispatchEvents(prevRoot, StandardWatchEventKinds.ENTRY_MODIFY, c);
             }
         }
         for (OSSObjectSummary p : prevObjects.values()) {
             // 本次文件不存在，文件被删除
-            dispatchEvents(prevRoot, new AliyunOSSWatchEvent(StandardWatchEventKinds.ENTRY_DELETE,  null, p));
+            dispatchEvents(prevRoot, StandardWatchEventKinds.ENTRY_DELETE, p);
         }
     }
 
     /**
      * 事件分发
      */
-    private void dispatchEvents(String root, AliyunOSSWatchEvent event) {
+    private void dispatchEvents(String root, WatchEvent.Kind<Path> kind, OSSObjectSummary object) {
+        String targetUri = fileStore.getUri().toString() + "/" + object.getKey();
+        AliyunOSSWatchEvent event = new AliyunOSSWatchEvent(kind, fileStore, targetUri, null);
         for (Map.Entry<String, String> uri : watchUris.tailMap(root).entrySet()) {
             // 只通知监听范围内的事件
             if (uri.getKey().startsWith(root)) {

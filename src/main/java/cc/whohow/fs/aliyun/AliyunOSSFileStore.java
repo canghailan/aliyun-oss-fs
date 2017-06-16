@@ -51,6 +51,10 @@ public class AliyunOSSFileStore extends FileStore {
         this.cname = cname.stream().distinct().collect(Collectors.toList());
     }
 
+    public AliyunOSSFileSystemProvider provider() {
+        return fileSystemProvider;
+    }
+
     public String getScheme() {
         return uri.getScheme();
     }

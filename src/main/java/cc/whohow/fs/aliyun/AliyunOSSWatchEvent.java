@@ -1,7 +1,5 @@
 package cc.whohow.fs.aliyun;
 
-import com.aliyun.oss.model.OSSObjectSummary;
-
 import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 
@@ -11,20 +9,23 @@ import java.nio.file.WatchEvent;
 public class AliyunOSSWatchEvent implements WatchEvent<Path> {
     private final long timestamp; // 事件时间戳
     private final Kind<Path> kind; // 事件类型
-    private final OSSObjectSummary target; // 事件目标
+    private final String targetUri; // 事件目标URI
+    private final AliyunOSSFileStore fileStore; // 阿里云Bucket
     private final AliyunOSSPath watchable; // 事件监听者
 
     public AliyunOSSWatchEvent(AliyunOSSWatchEvent e, AliyunOSSPath watchable) {
         this.timestamp = e.timestamp;
         this.kind = e.kind;
-        this.target = e.target;
+        this.targetUri = e.targetUri;
+        this.fileStore = e.fileStore;
         this.watchable = watchable;
     }
 
-    public AliyunOSSWatchEvent(Kind<Path> kind, AliyunOSSPath watchable, OSSObjectSummary target) {
+    public AliyunOSSWatchEvent(Kind<Path> kind, AliyunOSSFileStore fileStore, String targetUri, AliyunOSSPath watchable) {
         this.timestamp = System.currentTimeMillis();
         this.kind = kind;
-        this.target = target;
+        this.targetUri = targetUri;
+        this.fileStore = fileStore;
         this.watchable = watchable;
     }
 
@@ -43,18 +44,11 @@ public class AliyunOSSWatchEvent implements WatchEvent<Path> {
         if (watchable == null) {
             return null;
         }
-        return watchable.getFileSystem().getPath(getContext());
+        return watchable.getFileSystem().getPath(targetUri.substring(watchable.toUri().toString().length()));
     }
 
-    public String getContext() {
-        if (watchable == null) {
-            return null;
-        }
-        return target.getKey().substring(watchable.getObjectKey().length());
-    }
-
-    public long getTimestamp() {
-        return timestamp;
+    public String getTargetUri() {
+        return targetUri;
     }
 
     public AliyunOSSPath getWatchable() {
@@ -62,17 +56,6 @@ public class AliyunOSSWatchEvent implements WatchEvent<Path> {
     }
 
     public AliyunOSSPath getTarget() {
-        if (watchable == null) {
-            return null;
-        }
-        return new AliyunOSSPath(watchable.getFileSystem(), "/" + target.getKey());
-    }
-
-    public String getBucket() {
-        return target.getBucketName();
-    }
-
-    public String getObjectKey() {
-        return target.getKey();
+        return fileStore.provider().getPath(targetUri);
     }
 }

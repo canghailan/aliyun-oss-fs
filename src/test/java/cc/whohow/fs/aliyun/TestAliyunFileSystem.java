@@ -13,8 +13,7 @@ public class TestAliyunFileSystem {
             AliyunOSSPath path =  fs.getPath("/temp/");
             path.watch((e) -> {
                 System.out.println(e.kind());
-                System.out.println(e.getBucket());
-                System.out.println(e.getObjectKey());
+                System.out.println(e.getTarget());
                 return null;
             });
             Thread.sleep(10000000);
