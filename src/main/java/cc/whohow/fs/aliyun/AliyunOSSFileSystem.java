@@ -1,15 +1,15 @@
 package cc.whohow.fs.aliyun;
 
 import cc.whohow.fs.PatternPathMatcher;
-import com.aliyun.oss.model.OSSObjectSummary;
 
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.*;
 import java.nio.file.attribute.UserPrincipalLookupService;
-import java.nio.file.spi.FileSystemProvider;
-import java.util.*;
-import java.util.regex.Pattern;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -67,7 +67,7 @@ public class AliyunOSSFileSystem extends FileSystem {
 
 
     @Override
-    public FileSystemProvider provider() {
+    public AliyunOSSFileSystemProvider provider() {
         return fileSystemProvider;
     }
 
@@ -144,7 +144,7 @@ public class AliyunOSSFileSystem extends FileSystem {
 
     @Override
     public WatchService newWatchService() throws IOException {
-        throw new UnsupportedOperationException();
+        return fileSystemProvider.getWatchService();
     }
 
     @Override

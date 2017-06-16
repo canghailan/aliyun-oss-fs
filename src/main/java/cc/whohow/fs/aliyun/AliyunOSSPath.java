@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.Iterator;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -214,12 +215,23 @@ public class AliyunOSSPath implements Path {
 
     @Override
     public WatchKey register(WatchService watcher, WatchEvent.Kind<?>[] events, WatchEvent.Modifier... modifiers) throws IOException {
-        throw new UnsupportedOperationException();
+        return register(watcher, events);
     }
 
     @Override
     public WatchKey register(WatchService watcher, WatchEvent.Kind<?>[] events) throws IOException {
-        throw new UnsupportedOperationException();
+        if (fileSystem.provider().getWatchService() == watcher) {
+            return watch();
+        }
+        throw new IllegalArgumentException();
+    }
+
+    public AliyunOSSWatchKey watch() throws IOException {
+        return fileSystem.provider().getWatchService().register(this);
+    }
+
+    public void watch(Function<AliyunOSSWatchEvent, ?> listener) throws IOException {
+        fileSystem.provider().getWatchService().register(this, listener);
     }
 
     @Override
@@ -237,5 +249,16 @@ public class AliyunOSSPath implements Path {
     @Override
     public String toString() {
         return isAbsolute() ? getVfsPath() : pathDescriptor;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        AliyunOSSPath that = (AliyunOSSPath) object;
+        return that.fileSystem.equals(this.fileSystem) && that.pathDescriptor.equals(this.pathDescriptor);
+    }
+
+    @Override
+    public int hashCode() {
+        return fileSystem.hashCode() * 31 + pathDescriptor.hashCode();
     }
 }

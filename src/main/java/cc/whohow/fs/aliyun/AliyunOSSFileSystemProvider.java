@@ -14,9 +14,7 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.*;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -33,6 +31,8 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     // 文件系统缓存及搜索表，Key为URI，按URI长度倒序及URI字典序排序
     private final ConcurrentMap<String, AliyunOSSFileSystem> fileSystems = new ConcurrentSkipListMap<>(
             Comparator.comparing(String::length).reversed().thenComparing(String::compareTo));
+    // 文件监听
+    private volatile AliyunOSSWatchService watchService;
 
     public AliyunOSSFileSystemProvider(Properties properties) {
         this.intranet = "intranet".equalsIgnoreCase(detectNetwork());
@@ -107,6 +107,13 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
 
     public Collection<FileStore> getFileStores() {
         return Collections.unmodifiableCollection(fileStores.values());
+    }
+
+    public synchronized AliyunOSSWatchService getWatchService() {
+        if (watchService == null) {
+            watchService = new AliyunOSSWatchService(5000);
+        }
+        return watchService;
     }
 
     @Override
@@ -796,6 +803,12 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
 
     @Override
     public void close() throws Exception {
+        if (watchService != null) {
+            try {
+                watchService.close();
+            } catch (Throwable ignore){
+            }
+        }
         for (OSSClient client : clients.values()) {
             try {
                 client.shutdown();
