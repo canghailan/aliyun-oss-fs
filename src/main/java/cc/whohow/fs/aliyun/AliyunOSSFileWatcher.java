@@ -14,11 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 
 /**
- * 轻量级文件监听
+ * 轻量级文件监听器
  */
 public class AliyunOSSFileWatcher implements Runnable {
     private final AliyunOSSFile file; // 文件
-    private final BiFunction<WatchEvent.Kind<?>, AliyunOSSFile, Boolean> listener; // 回调
+    private final BiFunction<WatchEvent.Kind<?>, AliyunOSSFileWatcher, Boolean> listener; // 回调
 
     private volatile ScheduledFuture<?> future; // 任务
     private volatile long startTime; // 开始时间
@@ -26,9 +26,16 @@ public class AliyunOSSFileWatcher implements Runnable {
 
     private volatile SimplifiedObjectMeta objectMeta; // 文件元数据
 
-    public AliyunOSSFileWatcher(AliyunOSSFile file, BiFunction<WatchEvent.Kind<?>, AliyunOSSFile, Boolean> listener) {
+    public AliyunOSSFileWatcher(AliyunOSSFile file, BiFunction<WatchEvent.Kind<?>, AliyunOSSFileWatcher, Boolean> listener) {
         this.file = file;
         this.listener = listener;
+    }
+
+    /**
+     * 监听文件
+     */
+    public AliyunOSSFile watchable() {
+        return file;
     }
 
     /**
@@ -56,26 +63,32 @@ public class AliyunOSSFileWatcher implements Runnable {
         SimplifiedObjectMeta prevObjectMeta = objectMeta;
         objectMeta = getObjectMeta();
         if (prevObjectMeta == null && objectMeta != null) {
-            if(Boolean.FALSE.equals(listener.apply(StandardWatchEventKinds.ENTRY_CREATE, file))) {
+            if(Boolean.FALSE.equals(listener.apply(StandardWatchEventKinds.ENTRY_CREATE, this))) {
                 stopAndClose();
             }
         } else if (prevObjectMeta != null && objectMeta == null) {
-            if (Boolean.FALSE.equals(listener.apply(StandardWatchEventKinds.ENTRY_DELETE, file))) {
+            if (Boolean.FALSE.equals(listener.apply(StandardWatchEventKinds.ENTRY_DELETE, this))) {
                 stopAndClose();
             }
         } else if (prevObjectMeta != null && objectMeta != null) {
             if (!Objects.equals(prevObjectMeta.getETag(), objectMeta.getETag())) {
-                if (Boolean.FALSE.equals(listener.apply(StandardWatchEventKinds.ENTRY_MODIFY, file))) {
+                if (Boolean.FALSE.equals(listener.apply(StandardWatchEventKinds.ENTRY_MODIFY, this))) {
                     stopAndClose();
                 }
             }
         }
     }
 
+    /**
+     * 运行时间
+     */
     public long getRunningTime() {
         return System.currentTimeMillis() - startTime;
     }
 
+    /**
+     * 监听次数
+     */
     public int getRunningCounter() {
         return runningCounter.get();
     }

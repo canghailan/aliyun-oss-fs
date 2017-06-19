@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.nio.file.WatchEvent;
 import java.util.Objects;
 import java.util.Spliterators;
 import java.util.function.BiFunction;
@@ -250,7 +251,7 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
     /**
      * 监视文件
      */
-    public AliyunOSSFileWatcher watch(BiFunction<java.nio.file.WatchEvent.Kind<?>, AliyunOSSFile, Boolean> listener) {
+    public AliyunOSSFileWatcher watch(BiFunction<WatchEvent.Kind<?>, AliyunOSSFileWatcher, Boolean> listener) {
         if (!isFile()) {
             throw new UnsupportedOperationException();
         }
