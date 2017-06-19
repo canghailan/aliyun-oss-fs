@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /**
- * 轻量级阿里云文件对象
+ * 轻量级阿里云文件对象，线程不安全，需自行保证client的状态，如不确定，请clone后使用
  */
 public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
     private static final Pattern NAMES = Pattern.compile("(.*?)([^/]+)/?$");
@@ -28,6 +28,9 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
     private final String objectKey;
     private volatile OSSClient client;
 
+    /**
+     * http://[accessKeyId]:[secretAccessKey]@[bucketName].[endpoint]/[objectKey]
+     */
     public AliyunOSSFile(URI uri) {
         String[] user = uri.getUserInfo().split(":");
         String[] host = uri.getHost().split("\\.", 2);
@@ -39,6 +42,9 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
         this.objectKey = uri.getPath().substring(1);
     }
 
+    /**
+     * 标准参数
+     */
     public AliyunOSSFile(String accessKeyId, String secretAccessKey, String bucketName, String endpoint, String objectKey) {
         this.uri = URI.create(String.format("http://%s:%s@%s.%s/%s", accessKeyId, secretAccessKey, bucketName, endpoint, objectKey));
         this.accessKeyId = accessKeyId;
@@ -46,6 +52,18 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
         this.bucketName = bucketName;
         this.endpoint = endpoint;
         this.objectKey = objectKey;
+    }
+
+    /**
+     * clone
+     */
+    public AliyunOSSFile(AliyunOSSFile file) {
+        this.uri = file.uri;
+        this.accessKeyId = file.accessKeyId;
+        this.secretAccessKey = file.secretAccessKey;
+        this.bucketName = file.bucketName;
+        this.endpoint = file.endpoint;
+        this.objectKey = file.objectKey;
     }
 
     @Override
