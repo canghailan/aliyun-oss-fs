@@ -111,7 +111,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
 
     public synchronized AliyunOSSWatchService getWatchService() {
         if (watchService == null) {
-            watchService = new AliyunOSSWatchService(5000);
+            watchService = new AliyunOSSWatchService(Long.parseLong(properties.getProperty("watch-interval", "60000")));
         }
         return watchService;
     }
