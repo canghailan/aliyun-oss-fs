@@ -4,10 +4,7 @@ import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.common.utils.IOUtils;
 import com.aliyun.oss.model.SimplifiedObjectMeta;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.URI;
 import java.nio.file.WatchEvent;
 import java.util.Objects;
@@ -217,10 +214,10 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
     }
 
     /**
-     * 写
+     * 写，文件需不存在，默认 128KB 缓冲区
      */
     public OutputStream newOutputStream() {
-        return new AliyunOSSOutputStream(getClient(), bucketName, objectKey);
+        return new BufferedOutputStream(new AliyunOSSOutputStream(getClient(), bucketName, objectKey), 128 * 1024);
     }
 
     /**
