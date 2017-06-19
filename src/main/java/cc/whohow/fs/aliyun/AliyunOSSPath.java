@@ -230,7 +230,7 @@ public class AliyunOSSPath implements Path {
         return fileSystem.provider().getWatchService().register(this);
     }
 
-    public void watch(Function<AliyunOSSWatchEvent, ?> listener) throws IOException {
+    public void watch(Function<AliyunOSSWatchEvent, Boolean> listener) throws IOException {
         fileSystem.provider().getWatchService().register(this, listener);
     }
 

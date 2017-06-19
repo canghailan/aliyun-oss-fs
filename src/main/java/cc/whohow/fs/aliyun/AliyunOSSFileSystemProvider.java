@@ -31,7 +31,9 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     // 文件系统缓存及搜索表，Key为URI，按URI长度倒序及URI字典序排序
     private final ConcurrentMap<String, AliyunOSSFileSystem> fileSystems = new ConcurrentSkipListMap<>(
             Comparator.comparing(String::length).reversed().thenComparing(String::compareTo));
-    // 文件监听
+    // 线程池
+    private volatile ScheduledExecutorService executor;
+    // 文件监听服务
     private volatile AliyunOSSWatchService watchService;
 
     public AliyunOSSFileSystemProvider(Properties properties) {
@@ -101,17 +103,32 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         return fileStores.computeIfAbsent(key, self -> new AliyunOSSFileStore(this, properties));
     }
 
-    public Collection<FileSystem> getFileSystems() {
-        return Collections.unmodifiableCollection(new HashSet<>(fileSystems.values()));
-    }
-
     public Collection<FileStore> getFileStores() {
         return Collections.unmodifiableCollection(fileStores.values());
     }
 
-    public synchronized AliyunOSSWatchService getWatchService() {
+    public Collection<FileSystem> getFileSystems() {
+        return Collections.unmodifiableCollection(new HashSet<>(fileSystems.values()));
+    }
+
+    public ScheduledExecutorService getExecutor() {
+        if (executor == null) {
+            synchronized (this) {
+                if (executor == null) {
+                    executor = Executors.newScheduledThreadPool(2);
+                }
+            }
+        }
+        return executor;
+    }
+
+    public AliyunOSSWatchService getWatchService() {
         if (watchService == null) {
-            watchService = new AliyunOSSWatchService(Long.parseLong(properties.getProperty("watch-interval", "60000")));
+            synchronized (this) {
+                if (watchService == null) {
+                    watchService = new AliyunOSSWatchService(this, properties);
+                }
+            }
         }
         return watchService;
     }
@@ -804,12 +821,41 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
 
     @Override
     public void close() throws Exception {
+        closeExecutor();
+        closeWatchService();
+        closeFileSystems();
+        closeClients();
+    }
+
+    private void closeExecutor() {
+        if (executor != null) {
+            try {
+                executor.shutdownNow();
+                executor.awaitTermination(3, TimeUnit.SECONDS);
+            } catch (InterruptedException ignore) {
+            }
+        }
+    }
+
+    private void closeWatchService() {
         if (watchService != null) {
             try {
                 watchService.close();
             } catch (Throwable ignore){
             }
         }
+    }
+
+    private void closeFileSystems() {
+        for (FileSystem fileSystem : getFileSystems()) {
+            try {
+                fileSystem.close();
+            }  catch (Throwable ignore){
+            }
+        }
+    }
+
+    private void closeClients() {
         for (OSSClient client : clients.values()) {
             try {
                 client.shutdown();

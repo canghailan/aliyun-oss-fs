@@ -10,11 +10,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 阿里云文件监听点
  */
 public class AliyunOSSWatchKey implements WatchKey {
+    private final AliyunOSSWatchService watchService; // 监听服务
     private final AliyunOSSPath watchable; // 监听目录
     private volatile boolean valid; // 是否有效
-    private volatile List<AliyunOSSWatchEvent> events = new CopyOnWriteArrayList<>(); // 事件列表
+    private volatile List<AliyunOSSWatchEvent> pendingEvents = new CopyOnWriteArrayList<>(); // 事件接收队列
 
-    public AliyunOSSWatchKey(AliyunOSSPath watchable) {
+    public AliyunOSSWatchKey(AliyunOSSWatchService watchService, AliyunOSSPath watchable) {
+        this.watchService = watchService;
         this.watchable = watchable;
         this.valid = true;
     }
@@ -26,25 +28,24 @@ public class AliyunOSSWatchKey implements WatchKey {
 
     @Override
     public List<WatchEvent<?>> pollEvents() {
-        // 保存当前事件列表
-        List<WatchEvent<?>> r = Collections.unmodifiableList(events);
-        // 启用新事件列表
-        events = new CopyOnWriteArrayList<>();
-        return r;
+        List<WatchEvent<?>> events = Collections.unmodifiableList(pendingEvents); // 保存当前事件列表
+        pendingEvents = new CopyOnWriteArrayList<>(); // 启用新事件列表
+        return events;
     }
 
     @Override
     public boolean reset() {
-        if (valid) {
-            events = new CopyOnWriteArrayList<>();
+        if (isValid()) {
+            pendingEvents = new CopyOnWriteArrayList<>();
+            return true;
         }
-        return valid;
+        return false;
     }
 
     @Override
     public void cancel() {
-//        valid = false;
-        throw new UnsupportedOperationException();
+        watchService.cancel(this);
+        valid = false;
     }
 
     @Override
@@ -53,12 +54,10 @@ public class AliyunOSSWatchKey implements WatchKey {
     }
 
     public boolean isSignalled() {
-        return !events.isEmpty();
+        return !pendingEvents.isEmpty();
     }
 
     public void offerEvent(AliyunOSSWatchEvent e) {
-        if (valid) {
-            events.add(new AliyunOSSWatchEvent(e, watchable));
-        }
+        pendingEvents.add(new AliyunOSSWatchEvent(e, watchable));
     }
 }

@@ -1,12 +1,13 @@
 package cc.whohow.fs.aliyun;
 
+import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.model.OSSObjectSummary;
 
 import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -15,68 +16,125 @@ import java.util.stream.StreamSupport;
  */
 public class AliyunOSSWatchTask implements Runnable {
     private final AliyunOSSWatchService watchService;
-    private final AliyunOSSFileStore fileStore; // 监听的Bucket
-    private final NavigableMap<String, String> watchUris = new ConcurrentSkipListMap<>(); // 注册的需监听的URI，<ObjectKey, URI>
-    private volatile String watchRoot; // 监听根目录
+    private final OSSClient client;
+    private final String watchBucketUri;
+    private final String watchBucketName;
+    private volatile ScheduledFuture<?> future;
+
+    private final NavigableSet<String> watchObjectKeys = new ConcurrentSkipListSet<>(); // 需监听的ObjectKey集合
+    private volatile String watchObjectKey; // 监听根目录
     private volatile Map<String, OSSObjectSummary> watchObjects; // 监听对象集合
 
-    public AliyunOSSWatchTask(AliyunOSSWatchService watchService, AliyunOSSFileStore fileStore) {
-        this.watchService = watchService;
-        this.fileStore = fileStore;
-        this.watchObjects = null;
-    }
-
-    public boolean registerIfAccept(AliyunOSSPath path) {
-        // 只接受同Bucket的监听任务
-        if (path.getBucketName().equals(fileStore.getBucketName())) {
-            if (watchUris.isEmpty()) {
-                watchUris.put(path.getObjectKey(), path.toUri().toString());
-                return true;
-            }
-            // 只接受上级目录及下级目录，如果是上级目录，自动切换为根目录
-            String firstKey = watchUris.firstKey();
-            String objectKey = path.getObjectKey();
-            if (firstKey.startsWith(objectKey) || objectKey.startsWith(firstKey)) {
-                watchUris.put(path.getObjectKey(), path.toUri().toString());
-                return true;
-            }
+    public AliyunOSSWatchTask(AliyunOSSWatchService watchService, OSSClient client,
+                              String watchBucketName, String watchEndpoint, String watchObjectKey) {
+        if (!watchObjectKey.endsWith("/")) {
+            throw new IllegalArgumentException();
         }
-        return false;
+        this.watchService = watchService;
+        this.client = client;
+        this.watchBucketUri = String.format("http://%s.%s/", watchBucketName, watchEndpoint);
+        this.watchBucketName = watchBucketName;
+        this.watchObjectKeys.add(watchObjectKey);
+        this.watchObjectKey = watchObjectKey;
     }
 
-    public Collection<String> getWatchUris() {
-        return watchUris.values();
+    /**
+     * 是否可重用此任务
+     */
+    public boolean accept(String uri) {
+        String watchUri = getWatchUri();
+        return watchUri.startsWith(uri) || uri.startsWith(watchUri);
+    }
+
+    /**
+     * 当前监听根对象
+     */
+    public String getWatchUri() {
+        return watchBucketUri + watchObjectKeys.first();
+    }
+
+    public String getWatchBucketUri() {
+        return watchBucketUri;
+    }
+
+    /**
+     * 新增监听对象
+     */
+    public void addWatchObjectKey(String objectKey) {
+        String rootObjectKey = watchObjectKeys.first();
+        if (rootObjectKey.startsWith(objectKey) || objectKey.startsWith(rootObjectKey)) {
+            watchObjectKeys.add(objectKey);
+        } else {
+            throw new IllegalArgumentException();
+        }
+    }
+
+    /**
+     * 移除监听对象
+     */
+    public void removeWatchObjectKey(String objectKey) {
+        watchObjectKeys.remove(objectKey);
+    }
+
+    /**
+     * 获取所有监听对象
+     */
+    public Collection<String> getWatchObjectKeys() {
+        return watchObjectKeys;
+    }
+
+    /**
+     * 开始
+     */
+    public void start(ScheduledExecutorService executor, long interval, TimeUnit unit) {
+        future = executor.scheduleWithFixedDelay(this, 0, interval, unit);
+    }
+
+    /**
+     * 停止
+     */
+    public void stop() {
+        future.cancel(true);
     }
 
     @Override
     public void run() {
-        // 保存上次监听情况
-        String prevRoot = watchRoot;
-        Map<String, OSSObjectSummary> prevObjects = watchObjects;
+        // 保存上次状态
+        String prevWatchObjectKey = watchObjectKey;
+        Map<String, OSSObjectSummary> prevWatchObjects = watchObjects;
 
-        // 读取当前文件状态
-        watchRoot = watchUris.firstKey();
-        watchObjects = StreamSupport.stream(Spliterators.spliteratorUnknownSize(
-                new AliyunOSSObjectSummaryIterator(fileStore.getOSSClient(), fileStore.getBucketName(), watchRoot), 0), false)
+        // 读取当前状态
+        String currWatchObjectKey = watchObjectKeys.first();
+        Map<String, OSSObjectSummary> currWatchObjects = StreamSupport.stream(Spliterators.spliteratorUnknownSize(
+                new AliyunOSSObjectSummaryIterator(client, watchBucketName, currWatchObjectKey), 0), false)
                 .collect(Collectors.toMap(OSSObjectSummary::getKey, self -> self));
 
-        if (prevObjects == null) {
+        // 更新状态
+        watchObjectKey = currWatchObjectKey;
+        watchObjects  = currWatchObjects;
+
+        if (prevWatchObjects == null) {
             return;
         }
 
-        for (OSSObjectSummary c : watchObjects.values()) {
-            OSSObjectSummary p = prevObjects.remove(c.getKey());
+        boolean watchObjectKeyNotChange = currWatchObjectKey.equals(prevWatchObjectKey);
+        for (OSSObjectSummary c : currWatchObjects.values()) {
+            OSSObjectSummary p = prevWatchObjects.remove(c.getKey());
             if (p == null) {
                 // 上次记录中文件不存在，文件新增或监听范围扩大
-                dispatchEvents(prevRoot, StandardWatchEventKinds.ENTRY_CREATE, c);
+                if (watchObjectKeyNotChange || c.getKey().startsWith(prevWatchObjectKey)) {
+                    dispatchEvents(prevWatchObjectKey, StandardWatchEventKinds.ENTRY_CREATE, c);
+                }
             } else if (!Objects.equals(p.getETag(), c.getETag())) {
                 // ETag变化，文件被修改
-                dispatchEvents(prevRoot, StandardWatchEventKinds.ENTRY_MODIFY, c);
+                dispatchEvents(prevWatchObjectKey, StandardWatchEventKinds.ENTRY_MODIFY, c);
             }
         }
-        for (OSSObjectSummary p : prevObjects.values()) {
-            // 本次文件不存在，文件被删除
-            dispatchEvents(prevRoot, StandardWatchEventKinds.ENTRY_DELETE, p);
+        for (OSSObjectSummary p : prevWatchObjects.values()) {
+            // 本次文件不存在，文件被删除或监听范围缩小
+            if (watchObjectKeyNotChange || p.getKey().startsWith(currWatchObjectKey)) {
+                dispatchEvents(prevWatchObjectKey, StandardWatchEventKinds.ENTRY_DELETE, p);
+            }
         }
     }
 
@@ -84,12 +142,11 @@ public class AliyunOSSWatchTask implements Runnable {
      * 事件分发
      */
     private void dispatchEvents(String root, WatchEvent.Kind<Path> kind, OSSObjectSummary object) {
-        String targetUri = fileStore.getUri().toString() + "/" + object.getKey();
-        AliyunOSSWatchEvent event = new AliyunOSSWatchEvent(kind, fileStore, targetUri, null);
-        for (Map.Entry<String, String> uri : watchUris.tailMap(root).entrySet()) {
+        AliyunOSSWatchEvent event = new AliyunOSSWatchEvent(kind, watchService.provider(), watchBucketUri + object.getKey(), null);
+        for (String objectKey : watchObjectKeys.tailSet(root)) {
             // 只通知监听范围内的事件
-            if (uri.getKey().startsWith(root)) {
-                watchService.dispatchEvents(uri.getValue(), event);
+            if (objectKey.startsWith(root)) {
+                watchService.dispatchEvents(watchBucketUri + objectKey, event);
             } else {
                 break;
             }

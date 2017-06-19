@@ -63,6 +63,14 @@ public class AliyunOSSFileStore extends FileStore {
         return bucketName;
     }
 
+    public String getExtranetEndpoint() {
+        return extranetEndpoint;
+    }
+
+    public String getIntranetEndpoint() {
+        return intranetEndpoint;
+    }
+
     public URI getUri() {
         return uri;
     }
