@@ -1,6 +1,7 @@
 package cc.whohow.fs.aliyun;
 
 import com.aliyun.oss.OSSClient;
+import com.aliyun.oss.common.utils.IOUtils;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -168,6 +169,18 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
 
     public AliyunOSSFileChannel newFileChannel() throws IOException {
         return new AliyunOSSFileChannel(getClient(), bucketName, objectKey);
+    }
+
+    public byte[] readAllBytes() throws IOException {
+        try (InputStream stream = newInputStream()) {
+            return IOUtils.readStreamAsByteArray(stream);
+        }
+    }
+
+    public String readAllAsString(String charset) throws IOException {
+        try (InputStream stream = newInputStream()) {
+            return IOUtils.readStreamAsString(stream, charset);
+        }
     }
 
     public String toString() {
