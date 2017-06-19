@@ -1,5 +1,8 @@
 package cc.whohow.fs.aliyun;
 
+import com.aliyun.oss.OSSClient;
+import com.aliyun.oss.OSSErrorCode;
+import com.aliyun.oss.OSSException;
 import com.aliyun.oss.model.GetObjectRequest;
 
 import java.io.File;
@@ -10,22 +13,43 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
 
 public class AliyunOSSFileChannel implements SeekableByteChannel {
-    private final AliyunOSSPath path; // 路径
+    private final OSSClient client;
+    private final String bucketName;
+    private final String objectKey;
     private final File tempFile; // 临时文件
     private final FileChannel tempFileChannel; // 临时文件Channel
     private volatile boolean modified; // 文件是否被修改
 
-    public AliyunOSSFileChannel(AliyunOSSPath path) throws IOException {
-        if (!path.isFile()) {
-            throw new IOException(path.toUri() + " is not file");
+    public AliyunOSSFileChannel(OSSClient client, String bucketName, String objectKey) throws IOException {
+        if (objectKey.endsWith("/")) {
+            throw new IOException("NotFile");
         }
-        this.path = path;
+        this.client = client;
+        this.bucketName = bucketName;
+        this.objectKey = objectKey;
         this.tempFile = File.createTempFile("AliyunOSSFileChannel", null);
-        if (this.path.getClient().doesObjectExist(path.getBucketName(), path.getObjectKey())) {
-            this.path.getClient().getObject(new GetObjectRequest(path.getBucketName(), path.getObjectKey()), this.tempFile);
+        try {
+            client.getObject(new GetObjectRequest(bucketName, objectKey), this.tempFile);
+        } catch (OSSException e) {
+            if (!OSSErrorCode.NO_SUCH_BUCKET.equals(e.getErrorCode())
+                    && !OSSErrorCode.NO_SUCH_KEY.equals(e.getErrorCode())) {
+                throw e;
+            }
         }
         this.tempFileChannel = FileChannel.open(tempFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
         this.modified = false;
+    }
+
+    public OSSClient getClient() {
+        return client;
+    }
+
+    public String getBucketName() {
+        return bucketName;
+    }
+
+    public String getObjectKey() {
+        return objectKey;
     }
 
     @Override
@@ -72,7 +96,7 @@ public class AliyunOSSFileChannel implements SeekableByteChannel {
         try {
             tempFileChannel.close();
             if (modified) {
-                path.getClient().putObject(path.getBucketName(), path.getObjectKey(), tempFile);
+                client.putObject(bucketName, objectKey, tempFile);
             }
         }finally {
             if (!tempFile.delete()) {

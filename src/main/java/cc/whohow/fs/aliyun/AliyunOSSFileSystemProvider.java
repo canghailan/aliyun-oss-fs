@@ -549,7 +549,8 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
      * 写入文件，文件需不存在，默认 128KB 缓冲区
      */
     public OutputStream newOutputStream(AliyunOSSPath path) {
-        return new BufferedOutputStream(new AliyunOSSOutputStream(path), 128 * 1024);
+        return new BufferedOutputStream(new AliyunOSSOutputStream(
+                path.getClient(), path.getBucketName(), path.getObjectKey()), 128 * 1024);
     }
 
     /**
@@ -679,7 +680,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     @Override
     public SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>[] attrs) throws IOException {
         AliyunOSSPath aliyunOSSPath = (AliyunOSSPath) path;
-        return new AliyunOSSFileChannel(aliyunOSSPath);
+        return new AliyunOSSFileChannel(aliyunOSSPath.getClient(), aliyunOSSPath.getBucketName(), aliyunOSSPath.getObjectKey());
     }
 
     @Override
