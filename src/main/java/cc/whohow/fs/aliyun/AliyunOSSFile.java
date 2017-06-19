@@ -2,14 +2,16 @@ package cc.whohow.fs.aliyun;
 
 import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.common.utils.IOUtils;
+import com.aliyun.oss.model.SimplifiedObjectMeta;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.URI;
 import java.util.Objects;
 import java.util.Spliterators;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -24,6 +26,7 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
     private final String endpoint;
     private final String objectKey;
     private volatile OSSClient client;
+    private volatile ScheduledFuture<?> watchKey;
 
     public AliyunOSSFile(URI uri) {
         String[] user = uri.getUserInfo().split(":");
@@ -51,9 +54,10 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         if (client != null) {
             client.shutdown();
+            client = null;
         }
     }
 
@@ -126,12 +130,16 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
         return !objectKey.endsWith("/");
     }
 
+    public SimplifiedObjectMeta getObjectMeta() {
+        return getClient().getSimplifiedObjectMeta(bucketName, objectKey);
+    }
+
     public long lastModified() {
-        return getClient().getSimplifiedObjectMeta(bucketName, objectKey).getLastModified().getTime();
+        return getObjectMeta().getLastModified().getTime();
     }
 
     public long length() {
-        return getClient().getSimplifiedObjectMeta(bucketName, objectKey).getSize();
+        return getObjectMeta().getSize();
     }
 
     public String[] list() {
@@ -180,6 +188,32 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
     public String readAllAsString(String charset) throws IOException {
         try (InputStream stream = newInputStream()) {
             return IOUtils.readStreamAsString(stream, charset);
+        }
+    }
+
+    public synchronized void watch(ScheduledExecutorService executor, long delay, long timeout,
+                                   BiFunction<java.nio.file.WatchEvent.Kind<?>, AliyunOSSFile, Boolean> listener) {
+        if (watchKey != null) {
+            throw new IllegalStateException();
+        }
+        watchKey = executor.scheduleWithFixedDelay(
+                new AliyunOSSFileWatchTask(this, new AliyunOSSFileWatchTask.MaxTime(timeout), listener),
+                0, delay, TimeUnit.MILLISECONDS);
+    }
+
+    public synchronized void unwatch() {
+        if (watchKey == null) {
+            throw new IllegalStateException();
+        }
+        watchKey.cancel(true);
+        watchKey = null;
+    }
+
+    public void unwatchAndClose() {
+        try {
+            unwatch();
+        } finally {
+            close();
         }
     }
 
