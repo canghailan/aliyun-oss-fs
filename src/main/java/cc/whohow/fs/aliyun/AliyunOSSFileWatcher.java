@@ -12,6 +12,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 /**
  * 轻量级文件监听器
@@ -19,6 +20,7 @@ import java.util.function.BiFunction;
 public class AliyunOSSFileWatcher implements Runnable {
     private final AliyunOSSFile file; // 文件
     private final BiFunction<WatchEvent.Kind<?>, AliyunOSSFileWatcher, Boolean> listener; // 回调
+    private volatile Predicate<AliyunOSSFileWatcher> stopCondition; // 停止运行条件
 
     private volatile ScheduledFuture<?> future; // 任务
     private volatile long startTime; // 开始时间
@@ -39,9 +41,46 @@ public class AliyunOSSFileWatcher implements Runnable {
     }
 
     /**
+     * 设置停止条件
+     */
+    public AliyunOSSFileWatcher setStopCondition(Predicate<AliyunOSSFileWatcher> stopCondition) {
+        if (this.stopCondition == null) {
+            this.stopCondition = stopCondition;
+        } else {
+            this.stopCondition = this.stopCondition.or(stopCondition);
+        }
+        return this;
+    }
+
+    /**
+     * 设置最大运行时间
+     */
+    public AliyunOSSFileWatcher setMaxRunningTime(long max, TimeUnit unit) {
+        return setMaxRunningTime(unit.toMillis(max));
+    }
+
+    /**
+     * 设置最大运行时间
+     */
+    public AliyunOSSFileWatcher setMaxRunningTime(long max) {
+        return setStopCondition((watcher) -> watcher.getRunningTime() >= max);
+    }
+
+    /**
+     * 设置最大运行次数
+     */
+    public AliyunOSSFileWatcher setMaxRunningCount(int max) {
+        return setStopCondition((watcher) -> watcher.getRunningCounter() >= max);
+    }
+
+    /**
      * 开始
      */
     public AliyunOSSFileWatcher start(ScheduledExecutorService executor, long interval, TimeUnit unit) {
+        if (this.stopCondition == null) {
+            this.stopCondition = (watcher) -> false;
+        }
+
         this.objectMeta = getObjectMeta();
         this.startTime = System.currentTimeMillis();
         this.future = executor.scheduleWithFixedDelay(this, 0, interval, unit);
@@ -58,6 +97,11 @@ public class AliyunOSSFileWatcher implements Runnable {
 
     @Override
     public void run() {
+        if (stopCondition.test(this)) {
+            stopAndClose();
+            return;
+        }
+
         runningCounter.getAndIncrement();
 
         SimplifiedObjectMeta prevObjectMeta = objectMeta;
