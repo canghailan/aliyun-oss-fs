@@ -133,7 +133,7 @@ public class AliyunOSSWatchTask implements Runnable {
         for (OSSObjectSummary p : prevWatchObjects.values()) {
             // 本次文件不存在，文件被删除或监听范围缩小
             if (watchObjectKeyNotChange || p.getKey().startsWith(currWatchObjectKey)) {
-                dispatchEvents(prevWatchObjectKey, StandardWatchEventKinds.ENTRY_DELETE, p);
+                dispatchEvents(currWatchObjectKey, StandardWatchEventKinds.ENTRY_DELETE, p);
             }
         }
     }
@@ -143,13 +143,29 @@ public class AliyunOSSWatchTask implements Runnable {
      */
     private void dispatchEvents(String root, WatchEvent.Kind<Path> kind, OSSObjectSummary object) {
         AliyunOSSWatchEvent event = new AliyunOSSWatchEvent(kind, watchService.provider(), watchBucketUri + object.getKey(), null);
-        for (String objectKey : watchObjectKeys.tailSet(root)) {
+        for (String watchObjectKey : watchObjectKeys.tailSet(root)) {
             // 只通知监听范围内的事件
-            if (objectKey.startsWith(root)) {
-                watchService.dispatchEvents(watchBucketUri + objectKey, event);
+            if (watchObjectKey.startsWith(root)) {
+                if (watchObjectKey.endsWith("/")) {
+                    if (object.getKey().startsWith(watchObjectKey)) {
+                        watchService.dispatchEvents(watchBucketUri + watchObjectKey, event);
+                    }
+                } else {
+                    if (object.getKey().equals(watchObjectKey)) {
+                        watchService.dispatchEvents(watchBucketUri + watchObjectKey, event);
+                    }
+                }
             } else {
                 break;
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        // debug
+        return "[WatchTask][1] 监听根目录：" + getWatchUri() + "\n" +
+                "[WatchTask][2] 监听点集合：" + watchObjectKeys + "\n" +
+                "[WatchTask][3] 监听对象数：" + watchObjects.size() + "\n";
     }
 }

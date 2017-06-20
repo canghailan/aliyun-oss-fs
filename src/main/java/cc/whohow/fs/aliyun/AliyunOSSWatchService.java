@@ -210,4 +210,24 @@ public class AliyunOSSWatchService implements WatchService {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        // debug
+        StringBuilder buffer = new StringBuilder();
+        buffer.append("[WatchService][1] 监听任务：").append(tasks.size()).append("\n");
+        for (AliyunOSSWatchTask task : tasks) {
+            buffer.append(task);
+        }
+        buffer.append("[WatchService][2] 监听点：").append(watchKeys.size()).append("\n");
+        for (Map.Entry<String, List<AliyunOSSWatchKey>> e : watchKeys.entrySet()) {
+            buffer.append(e.getValue().size()).append("\t").append(e.getKey()).append("\n");
+        }
+        buffer.append("[WatchService][3] 监听点队列：").append(watchKeyQueue.size()).append("\n");
+        buffer.append("[WatchService][4] 监听回调：").append(listeners.size()).append("\n");
+        for (Map.Entry<String, List<Function<AliyunOSSWatchEvent, Boolean>>> e : listeners.entrySet()) {
+            buffer.append(e.getValue().size()).append("\t").append(e.getKey()).append("\n");
+        }
+        return buffer.toString();
+    }
 }
