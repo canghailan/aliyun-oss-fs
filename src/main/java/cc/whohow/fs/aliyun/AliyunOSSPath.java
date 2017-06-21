@@ -28,7 +28,7 @@ public class AliyunOSSPath implements Path {
     }
 
     public OSSClient getClient() {
-        return getFileStore().getOSSClient();
+        return getFileStore().getClient();
     }
 
     public String getBucketName() {
@@ -260,5 +260,11 @@ public class AliyunOSSPath implements Path {
     @Override
     public int hashCode() {
         return fileSystem.hashCode() * 31 + pathDescriptor.hashCode();
+    }
+
+    public AliyunOSSFile toAliyunOSSFile() {
+        AliyunOSSFileStore fileStore = getFileStore();
+        return new AliyunOSSFile(fileStore.getAccessKeyId(), fileStore.getSecretAccessKey(),
+                fileStore.getBucketName(), fileStore.getEndpoint(), getObjectKey());
     }
 }

@@ -2,6 +2,7 @@ package cc.whohow.fs.aliyun;
 
 import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.common.utils.IOUtils;
+import com.aliyun.oss.model.AppendObjectRequest;
 import com.aliyun.oss.model.SimplifiedObjectMeta;
 
 import java.io.*;
@@ -261,6 +262,22 @@ public class AliyunOSSFile implements Comparable<AliyunOSSFile>, Closeable {
         try (InputStream stream = newInputStream()) {
             return IOUtils.readStreamAsString(stream, charset);
         }
+    }
+
+    /**
+     * 写入内容
+     */
+    public void write(byte[] bytes) {
+        getClient().putObject(bucketName, objectKey, new ByteArrayInputStream(bytes));
+    }
+
+    /**
+     * 追加写入内容，返回文件长度。要求文件不存在，且position为当前文件长度。本特性可以作为分布式锁使用。
+     */
+    public long append(long position, byte[] bytes) {
+        return getClient().appendObject(
+                new AppendObjectRequest(bucketName, objectKey, new ByteArrayInputStream(bytes))
+                        .withPosition(position)).getNextPosition();
     }
 
     /**

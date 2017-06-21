@@ -23,6 +23,8 @@ public class AliyunOSSFileStore extends FileStore {
     private final Properties properties;
     private final OSSClient client; // 阿里云OSS客户端
 
+    private final String accessKeyId;
+    private final String secretAccessKey;
     private final String bucketName;
     private final String extranetEndpoint; // 外网接入点
     private final String intranetEndpoint; // 内网接入点
@@ -30,22 +32,23 @@ public class AliyunOSSFileStore extends FileStore {
     private final List<String> cname; // 关联域名：CDN，外网，内网等，按优先级排序
 
     public AliyunOSSFileStore(AliyunOSSFileSystemProvider fileSystemProvider, Properties properties) {
-        String accessKeyId = properties.getProperty("accessKeyId");
-        String secretAccessKey = properties.getProperty("secretAccessKey");
-        List<String> cname = Arrays.stream(properties.getProperty("cname", "").split(","))
-                .map(String::trim)
-                .filter(self -> !self.isEmpty())
-                .collect(Collectors.toList());
+        this.fileSystemProvider = fileSystemProvider;
+        this.properties = properties;
+
+        this.accessKeyId = properties.getProperty("accessKeyId");
+        this.secretAccessKey = properties.getProperty("secretAccessKey");
         this.bucketName = properties.getProperty("bucketName");
         this.extranetEndpoint = properties.getProperty("endpoint");
         this.intranetEndpoint = properties.getProperty("endpoint-internal");
 
-        this.fileSystemProvider = fileSystemProvider;
-        this.properties = properties;
         this.client = fileSystemProvider.getOSSClient(accessKeyId, secretAccessKey,
                 fileSystemProvider.isIntranet() ? intranetEndpoint : extranetEndpoint); // 获取共享OSSClient，优先内网
         this.uri = URI.create("http://" + bucketName + "." + extranetEndpoint);
 
+        List<String> cname = Arrays.stream(properties.getProperty("cname", "").split(","))
+                .map(String::trim)
+                .filter(self -> !self.isEmpty())
+                .collect(Collectors.toList());
         cname.add(bucketName + "." + extranetEndpoint);
         cname.add(bucketName + "." + intranetEndpoint);
         this.cname = cname.stream().distinct().collect(Collectors.toList());
@@ -59,8 +62,20 @@ public class AliyunOSSFileStore extends FileStore {
         return uri.getScheme();
     }
 
+    public String getAccessKeyId() {
+        return accessKeyId;
+    }
+
+    public String getSecretAccessKey() {
+        return secretAccessKey;
+    }
+
     public String getBucketName() {
         return bucketName;
+    }
+
+    public String getEndpoint() {
+        return fileSystemProvider.isIntranet() ? intranetEndpoint : extranetEndpoint;
     }
 
     public String getExtranetEndpoint() {
@@ -75,7 +90,7 @@ public class AliyunOSSFileStore extends FileStore {
         return uri;
     }
 
-    public OSSClient getOSSClient() {
+    public OSSClient getClient() {
         return client;
     }
 
