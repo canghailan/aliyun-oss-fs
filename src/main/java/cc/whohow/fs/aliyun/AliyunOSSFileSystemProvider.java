@@ -1,6 +1,7 @@
 package cc.whohow.fs.aliyun;
 
 import cc.whohow.fs.FilterDirectoryStream;
+import cc.whohow.fs.Names;
 import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.common.utils.IOUtils;
 import com.aliyun.oss.model.*;
@@ -9,12 +10,14 @@ import java.io.*;
 import java.net.*;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.*;
+import java.nio.file.FileSystem;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -149,6 +152,28 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
                 .map(self -> self.getValue().getPath("/" + uri.substring(self.getKey().length())))
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * 生成随机路径
+     */
+    public AliyunOSSPath getRandomPath(String prefix, String suffix) {
+        if (suffix == null || suffix.isEmpty()) {
+            return getPath(prefix + UUID.randomUUID());
+        } else {
+            return getPath(prefix + UUID.randomUUID() + suffix);
+        }
+    }
+
+    /**
+     * 生成随机路径
+     */
+    public AliyunOSSPath getRandomPath(AliyunOSSPath prefix, String suffix) {
+        if (suffix == null || suffix.isEmpty()) {
+            return new AliyunOSSPath(prefix, UUID.randomUUID().toString());
+        } else {
+            return new AliyunOSSPath(prefix, UUID.randomUUID() + suffix);
+        }
     }
 
     /**
@@ -317,6 +342,59 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     }
 
     /**
+     * 拷贝链接，忽略所有异常，直到任意一个成功为止，返回拷贝成功的链接
+     */
+    public String tryCopyAnyQuietly(AliyunOSSPath path, List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return null;
+        }
+        for (String url : urls) {
+            try {
+                if (path.isFile()) {
+                    copy(new URL(url), path);
+                } else {
+                    copy(new URL(url), getRandomPath(path, Names.getSuffix(url)));
+                }
+                return url;
+            } catch (Throwable ignore) {
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 拷贝所有链接，忽略所有异常，返回成功的集合
+     */
+    public Map<String, AliyunOSSPath> tryCopyAllQuietly(Map<String, AliyunOSSPath> collection) {
+        if (collection == null || collection.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return collection.entrySet().parallelStream().map((e) -> {
+            try {
+                copy(new URL(e.getKey()), e.getValue());
+                return e;
+            } catch (Throwable ignore) {
+                return null;
+            }
+        }).filter(Objects::nonNull)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * 拷贝所有链接到指定文件夹，自动生成随机名字，忽略所有异常，返回成功集合
+     */
+    public Map<String, AliyunOSSPath> tryCopyAllQuietly(AliyunOSSPath directory, List<String> urls) {
+        if (directory.isFile()) {
+            throw new IllegalArgumentException();
+        }
+        Map<String, AliyunOSSPath> map = new HashMap<>();
+        for (String url : urls) {
+            map.put(url, getRandomPath(directory, Names.getSuffix(url)));
+        }
+        return tryCopyAllQuietly(map);
+    }
+
+    /**
      * 拷贝文件夹，直接覆盖，小心使用
      */
     public void copyRecursively(String source, String target)
@@ -365,6 +443,28 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
      */
     public void delete(AliyunOSSPath path) {
         path.getClient().deleteObject(path.getBucketName(), path.getObjectKey());
+    }
+
+    /**
+     * 静默删除
+     */
+    public void deleteQuietly(String uri) {
+        try {
+            if (uri != null) {
+                delete(uri);
+            }
+        } catch (Throwable ignore) {
+        }
+    }
+
+    /**
+     * 静默删除
+     */
+    public void deleteQuietly(List<String> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        list.parallelStream().forEach(this::deleteQuietly);
     }
 
     /**

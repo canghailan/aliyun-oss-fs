@@ -27,12 +27,24 @@ public class AliyunOSSPath implements Path {
         this.pathDescriptor = pathDescriptor;
     }
 
+    public AliyunOSSPath(AliyunOSSPath parent, String child) {
+        this.fileSystem = parent.fileSystem;
+        this.pathDescriptor = parent.pathDescriptor + child;
+    }
+
     public OSSClient getClient() {
         return getFileStore().getClient();
     }
 
     public String getBucketName() {
         return getFileStore().getBucketName();
+    }
+
+    /**
+     * 路径描述符
+     */
+    public String getPathDescriptor() {
+        return pathDescriptor;
     }
 
     /**
@@ -63,6 +75,10 @@ public class AliyunOSSPath implements Path {
 
     public boolean isFile() {
         return !pathDescriptor.endsWith("/");
+    }
+
+    public boolean isDirectory() {
+        return pathDescriptor.endsWith("/");
     }
 
     @Override
