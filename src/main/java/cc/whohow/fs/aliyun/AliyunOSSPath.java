@@ -230,24 +230,52 @@ public class AliyunOSSPath implements Path {
     }
 
     @Override
-    public WatchKey register(WatchService watcher, WatchEvent.Kind<?>[] events, WatchEvent.Modifier... modifiers) throws IOException {
+    public AliyunOSSWatchKey register(WatchService watcher, WatchEvent.Kind<?>[] events, WatchEvent.Modifier... modifiers) throws IOException {
         return register(watcher, events);
     }
 
     @Override
-    public WatchKey register(WatchService watcher, WatchEvent.Kind<?>[] events) throws IOException {
+    public AliyunOSSWatchKey register(WatchService watcher, WatchEvent.Kind<?>[] events) throws IOException {
         if (fileSystem.provider().getWatchService() == watcher) {
             return watch();
         }
         throw new IllegalArgumentException();
     }
 
+    /**
+     * 监听目录
+     */
     public AliyunOSSWatchKey watch() throws IOException {
         return fileSystem.provider().getWatchService().register(this);
     }
 
-    public void watch(Function<AliyunOSSWatchEvent, Boolean> listener) throws IOException {
+    /**
+     * 监听目录及文件，回调方法返回false则停止监听
+     */
+    public void watch(Function<AliyunOSSWatchEvent, Boolean> listener) {
         fileSystem.provider().getWatchService().register(this, listener);
+    }
+
+    /**
+     * 读取并监听文件，回调方法返回false则停止监听，读取成功返回true，失败返回false
+     */
+    public boolean getAndWatchQuietly(Function<AliyunOSSPath, Boolean> listener) {
+        if (isDirectory()) {
+            throw new UnsupportedOperationException();
+        }
+        watch((e) -> {
+            try {
+                return listener.apply(this);
+            } catch (Throwable ignore) {
+                return true;
+            }
+        });
+        try {
+            listener.apply(this);
+            return true;
+        } catch (Throwable ignore) {
+            return false;
+        }
     }
 
     @Override
