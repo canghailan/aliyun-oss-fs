@@ -32,6 +32,10 @@ public class AliyunOSSPath implements Path {
         this.pathDescriptor = parent.pathDescriptor + child;
     }
 
+    public AliyunOSSFileSystemProvider provider() {
+        return fileSystem.provider();
+    }
+
     public OSSClient getClient() {
         return getFileStore().getClient();
     }
