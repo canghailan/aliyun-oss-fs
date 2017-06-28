@@ -342,12 +342,16 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     }
 
     /**
-     * 拷贝链接，忽略所有异常，直到任意一个成功为止，返回拷贝成功的链接
+     * 拷贝链接，失败抛出最后一个异常，直到任意一个成功为止，返回拷贝成功的链接
      */
-    public String tryCopyAnyQuietly(AliyunOSSPath path, List<String> urls) {
+    public String tryCopyAny(AliyunOSSPath path, List<String> urls) {
+        if (path.isDirectory()) {
+            throw new IllegalArgumentException();
+        }
         if (urls == null || urls.isEmpty()) {
             return null;
         }
+        Throwable lastError = null;
         for (String url : urls) {
             try {
                 if (path.isFile()) {
@@ -356,10 +360,28 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
                     copy(new URL(url), getRandomPath(path, Names.getSuffix(url)));
                 }
                 return url;
-            } catch (Throwable ignore) {
+            } catch (Throwable e) {
+                lastError = e;
             }
         }
-        return null;
+        if (lastError instanceof RuntimeException) {
+            throw (RuntimeException) lastError;
+        } else if (lastError instanceof IOException) {
+            throw new UncheckedIOException((IOException) lastError);
+        } else {
+            throw new RuntimeException(lastError);
+        }
+    }
+
+    /**
+     * 拷贝链接，忽略所有异常，直到任意一个成功为止，返回拷贝成功的链接
+     */
+    public String tryCopyAnyQuietly(AliyunOSSPath path, List<String> urls) {
+        try {
+            return tryCopyAny(path, urls);
+        } catch (Throwable ignore) {
+            return null;
+        }
     }
 
     /**
