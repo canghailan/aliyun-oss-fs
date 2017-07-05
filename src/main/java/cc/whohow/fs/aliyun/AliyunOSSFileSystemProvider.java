@@ -345,7 +345,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
      * 拷贝链接，失败抛出最后一个异常，直到任意一个成功为止，返回拷贝成功的链接
      */
     public String tryCopyAny(AliyunOSSPath path, List<String> urls) throws Exception {
-        if (path.isDirectory()) {
+        if (!path.isFile()) {
             throw new IllegalArgumentException();
         }
         if (urls == null || urls.isEmpty()) {
@@ -354,11 +354,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         LinkedList<Exception> exceptions = new LinkedList<>();
         for (String url : urls) {
             try {
-                if (path.isFile()) {
-                    copy(new URL(url), path);
-                } else {
-                    copy(new URL(url), getRandomPath(path, Names.getSuffix(url)));
-                }
+                copy(new URL(url), path);
                 return url;
             } catch (Exception e) {
                 exceptions.add(e);
