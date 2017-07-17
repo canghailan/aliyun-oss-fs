@@ -193,42 +193,51 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     /**
      * 拷贝（上传）
      */
-    public void copy(File source, String target) {
-        copy(source, getPath(target));
+    public AliyunOSSPath copy(File source, String target) {
+        return copy(source, getPath(target));
     }
 
     /**
      * 拷贝（上传）
      */
-    public void copy(File source, AliyunOSSPath target) {
+    public AliyunOSSPath copy(File source, AliyunOSSPath target) {
         target.getClient().putObject(target.getBucketName(), target.getObjectKey(), source);
+        return target;
     }
 
     /**
      * 拷贝（上传）
      */
-    public void copy(InputStream source, String target) {
-        copy(source, getPath(target));
+    public AliyunOSSPath copyToRandom(File source, String prefix) {
+        return copy(source, getRandomPath(prefix, Names.getSuffix(source.getName())));
     }
 
     /**
      * 拷贝（上传）
      */
-    public void copy(InputStream source, AliyunOSSPath target) {
+    public AliyunOSSPath copy(InputStream source, String target) {
+        return copy(source, getPath(target));
+    }
+
+    /**
+     * 拷贝（上传）
+     */
+    public AliyunOSSPath copy(InputStream source, AliyunOSSPath target) {
         target.getClient().putObject(target.getBucketName(), target.getObjectKey(), source);
+        return target;
     }
 
     /**
      * 拷贝（上传）文件夹，直接覆盖，小心使用
      */
-    public void copyRecursively(File source, String target) throws IOException {
-        copyRecursively(source, getPath(target));
+    public AliyunOSSPath copyRecursively(File source, String target) throws IOException {
+        return copyRecursively(source, getPath(target));
     }
 
     /**
      * 拷贝（上传）文件夹，直接覆盖，小心使用
      */
-    public void copyRecursively(File source, AliyunOSSPath target) throws IOException {
+    public AliyunOSSPath copyRecursively(File source, AliyunOSSPath target) throws IOException {
         if (!source.isDirectory() || target.isFile()) {
             throw new IllegalArgumentException();
         }
@@ -248,33 +257,35 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
                     // 上传
                     client.putObject(bucketName, objectKey, self.toFile());
                 });
+        return target;
     }
 
     /**
      * 拷贝（下载）
      */
-    public void copy(String source, File target) {
-        copy(getPath(source), target);
+    public File copy(String source, File target) {
+        return copy(getPath(source), target);
     }
 
     /**
      * 拷贝（下载）
      */
-    public void copy(AliyunOSSPath source, File target) {
+    public File copy(AliyunOSSPath source, File target) {
         source.getClient().getObject(new GetObjectRequest(source.getBucketName(), source.getObjectKey()), target);
+        return target;
     }
 
     /**
      * 拷贝（下载）文件夹
      */
-    public void copyRecursively(String source, File target) {
-        copyRecursively(getPath(source), target);
+    public File copyRecursively(String source, File target) {
+        return copyRecursively(getPath(source), target);
     }
 
     /**
      * 拷贝（下载）文件夹
      */
-    public void copyRecursively(AliyunOSSPath source, File target) {
+    public File copyRecursively(AliyunOSSPath source, File target) {
         if (source.isFile() || !target.isDirectory()) {
             throw new IllegalArgumentException();
         }
@@ -292,19 +303,20 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
                     }
                     client.getObject(new GetObjectRequest(self.getBucketName(), self.getKey()), file);
                 });
+        return target;
     }
 
     /**
      * 拷贝（上传）
      */
-    public void copy(URL source, String target) throws IOException {
-        copy(source, getPath(target));
+    public AliyunOSSPath copy(URL source, String target) throws IOException {
+        return copy(source, getPath(target));
     }
 
     /**
      * 拷贝（上传）
      */
-    public void copy(URL source, AliyunOSSPath target) throws IOException {
+    public AliyunOSSPath copy(URL source, AliyunOSSPath target) throws IOException {
         URLConnection connection = source.openConnection();
         ObjectMetadata objectMetadata = new ObjectMetadata();
         if (connection.getContentType() != null) {
@@ -316,19 +328,27 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         try (InputStream stream = connection.getInputStream()) {
             target.getClient().putObject(target.getBucketName(), target.getObjectKey(), stream, objectMetadata);
         }
+        return target;
+    }
+
+    /**
+     * 拷贝（上传）
+     */
+    public AliyunOSSPath copyToRandom(URL source, String prefix) throws IOException {
+        return copy(source, getRandomPath(prefix, Names.getSuffix(source.getPath())));
     }
 
     /**
      * 拷贝
      */
-    public void copy(String source, String target) throws IOException {
-        copy(getPath(source), getPath(target));
+    public AliyunOSSPath copy(String source, String target) throws IOException {
+        return copy(getPath(source), getPath(target));
     }
 
     /**
      * 拷贝
      */
-    public void copy(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
+    public AliyunOSSPath copy(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
         if (source.getClient() == target.getClient()) {
             // 同客户端拷贝
             source.getClient().copyObject(source.getBucketName(), source.getObjectKey(), target.getBucketName(), target.getObjectKey());
@@ -339,12 +359,13 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
                 target.getClient().putObject(target.getBucketName(), target.getObjectKey(), stream, object.getObjectMetadata());
             }
         }
+        return target;
     }
 
     /**
      * 拷贝链接，失败抛出最后一个异常，直到任意一个成功为止，返回拷贝成功的链接
      */
-    public String tryCopyAny(AliyunOSSPath path, List<String> urls) throws Exception {
+    public String tryCopyAny(AliyunOSSPath path, Collection<String> urls) throws Exception {
         if (!path.isFile()) {
             throw new IllegalArgumentException();
         }
@@ -369,12 +390,65 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     /**
      * 拷贝链接，忽略所有异常，直到任意一个成功为止，返回拷贝成功的链接
      */
-    public String tryCopyAnyQuietly(AliyunOSSPath path, List<String> urls) {
+    public String tryCopyAnyQuietly(AliyunOSSPath path, Collection<String> urls) {
         try {
             return tryCopyAny(path, urls);
         } catch (Throwable ignore) {
             return null;
         }
+    }
+
+    /**
+     * 拷贝所有链接
+     */
+    public Map<String, AliyunOSSPath> copyAll(Map<String, AliyunOSSPath> collection) {
+        if (collection == null || collection.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        collection.entrySet().parallelStream().forEach((self) -> {
+            try {
+                copy(new URL(self.getKey()), self.getValue());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+        return collection;
+    }
+
+    /**
+     * 拷贝所有链接
+     */
+    public Map<String, AliyunOSSPath> copyAll(String directory, Collection<String> urls) {
+        return copyAll(getPath(directory), urls);
+    }
+
+    /**
+     * 拷贝所有链接
+     */
+    public Map<String, AliyunOSSPath> copyAll(AliyunOSSPath directory, Collection<String> urls) {
+        if (directory.isFile()) {
+            throw new IllegalArgumentException();
+        }
+        Map<String, AliyunOSSPath> map = new HashMap<>();
+        for (String url : urls) {
+            map.put(url, getRandomPath(directory, Names.getSuffix(url)));
+        }
+        return copyAll(map);
+    }
+
+    /**
+     * 拷贝所有链接
+     */
+    public List<AliyunOSSPath> copyAllOrdered(String directory, Collection<String> urls) {
+        return copyAllOrdered(getPath(directory), urls);
+    }
+
+    /**
+     * 拷贝所有链接
+     */
+    public List<AliyunOSSPath> copyAllOrdered(AliyunOSSPath directory, Collection<String> urls) {
+        Map<String, AliyunOSSPath> unordered = copyAll(directory, urls);
+        return urls.stream().map(unordered::get).collect(Collectors.toList());
     }
 
     /**
@@ -398,7 +472,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     /**
      * 拷贝所有链接到指定文件夹，自动生成随机名字，忽略所有异常，返回成功集合
      */
-    public Map<String, AliyunOSSPath> tryCopyAllQuietly(AliyunOSSPath directory, List<String> urls) {
+    public Map<String, AliyunOSSPath> tryCopyAllQuietly(AliyunOSSPath directory, Collection<String> urls) {
         if (directory.isFile()) {
             throw new IllegalArgumentException();
         }
@@ -412,15 +486,15 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     /**
      * 拷贝文件夹，直接覆盖，小心使用
      */
-    public void copyRecursively(String source, String target)
+    public AliyunOSSPath copyRecursively(String source, String target)
             throws IOException {
-        copyRecursively(getPath(source), getPath(target));
+        return copyRecursively(getPath(source), getPath(target));
     }
 
     /**
      * 拷贝文件夹，直接覆盖，小心使用
      */
-    public void copyRecursively(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
+    public AliyunOSSPath copyRecursively(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
         if (source.isFile() || target.isFile()) {
             throw new IllegalArgumentException();
         }
@@ -444,6 +518,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
                 }
             });
         }
+        return target;
     }
 
     /**
@@ -475,7 +550,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     /**
      * 静默删除
      */
-    public void deleteQuietly(List<String> list) {
+    public void deleteQuietly(Collection<String> list) {
         if (list == null || list.isEmpty()) {
             return;
         }
@@ -503,34 +578,36 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
     /**
      * 移动（重命名）
      */
-    public void move(String source, String target) throws IOException {
-        move(getPath(source), getPath(target));
+    public AliyunOSSPath move(String source, String target) throws IOException {
+        return move(getPath(source), getPath(target));
     }
 
     /**
      * 移动（重命名）
      */
-    public void move(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
+    public AliyunOSSPath move(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
         // 拷贝、删除模拟移动
         copy(source, target);
         delete(source);
+        return target;
     }
 
     /**
      * 移动（重命名）文件夹，小心使用
      */
-    public void moveRecursively(String source, String target)
+    public AliyunOSSPath moveRecursively(String source, String target)
             throws IOException {
-        moveRecursively(getPath(source), getPath(target));
+        return moveRecursively(getPath(source), getPath(target));
     }
 
     /**
      * 移动（重命名），小心使用
      */
-    public void moveRecursively(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
+    public AliyunOSSPath moveRecursively(AliyunOSSPath source, AliyunOSSPath target) throws IOException {
         // 先完成拷贝、再删除，保证数据完整性
         copyRecursively(source, target);
         deleteRecursively(source);
+        return target;
     }
 
     /**
@@ -578,7 +655,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         if (path.isFile()) {
             return getMetadata(path).getContentLength();
         }
-        return StreamSupport.stream(listObjectsRecursively(path).spliterator(), true)
+        return StreamSupport.stream(listObjectsRecursively(path).spliterator(), false)
                 .filter(self -> !self.getKey().endsWith("/"))
                 .mapToLong(OSSObjectSummary::getSize)
                 .sum();
@@ -598,7 +675,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         if (path.isFile()) {
             return 1L;
         }
-        return StreamSupport.stream(listObjectsRecursively(path).spliterator(), true)
+        return StreamSupport.stream(listObjectsRecursively(path).spliterator(), false)
                 .filter(self -> !self.getKey().endsWith("/"))
                 .count();
     }
@@ -617,7 +694,7 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         if (path.isFile()) {
             return getMetadata(path).getLastModified();
         }
-        return StreamSupport.stream(listObjectsRecursively(path).spliterator(), true)
+        return StreamSupport.stream(listObjectsRecursively(path).spliterator(), false)
                 .map(OSSObjectSummary::getLastModified)
                 .filter(Objects::nonNull)
                 .max(Date::compareTo)

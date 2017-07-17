@@ -10,13 +10,23 @@ public class TestAliyunFileSystem {
             properties.load(props);
         }
         try (AliyunOSSFileSystemProvider fs = new AliyunOSSFileSystemProvider(properties)) {
-            AliyunOSSPath path =  fs.getPath("/temp/");
-            path.watch((e) -> {
+           fs.getPath("/temp/test.txt").watch((e) -> {
+               System.out.println("test");
+               System.out.println(fs.getWatchService());
+               System.out.println(e.kind());
+               System.out.println(e.getTargetUri());
+               System.out.println("\n\n\n");
+               return true;
+           });
+            fs.getPath("/temp/test1.txt").watch((e) -> {
+                System.out.println("test1");
+                System.out.println(fs.getWatchService());
                 System.out.println(e.kind());
-                System.out.println(e.getTarget());
-                return null;
+                System.out.println(e.getTargetUri());
+                System.out.println("\n\n\n");
+                return true;
             });
-            Thread.sleep(10000000);
+           Thread.sleep(3600000);
         }
     }
 }
