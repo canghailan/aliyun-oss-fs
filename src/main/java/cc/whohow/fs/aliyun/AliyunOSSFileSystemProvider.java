@@ -535,16 +535,24 @@ public class AliyunOSSFileSystemProvider extends FileSystemProvider implements A
         path.getClient().deleteObject(path.getBucketName(), path.getObjectKey());
     }
 
+
+    /**
+     * 静默删除
+     */
+    public void deleteQuietly(AliyunOSSPath path) {
+        if (path != null) {
+            try {
+                delete(path);
+            } catch (Throwable ignore) {
+            }
+        }
+    }
+
     /**
      * 静默删除
      */
     public void deleteQuietly(String uri) {
-        try {
-            if (uri != null) {
-                delete(uri);
-            }
-        } catch (Throwable ignore) {
-        }
+        deleteQuietly(getPath(uri));
     }
 
     /**
