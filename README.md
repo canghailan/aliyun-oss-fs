@@ -1,3 +1,7 @@
+**停止维护，参见 [aliyun-oss-kit](https://github.com/canghailan/aliyun-oss-kit)**
+
+
+
 # 阿里云OSS Java FileSystem API
 
 ## Java FileSystem API
